@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gerador VRSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<h1>Gerador de XML VRSync</h1>
+<p class="muted">
+  Padrão de feed do Grupo OLX (ZAP Imóveis, VivaReal, Canal Pro).
+  Baseado na <a href="https://developers.grupozap.com/feeds/vrsync/" target="_blank" rel="noopener">documentação oficial</a>.
+  Campos com <span class="req">*</span> são obrigatórios. Os dados ficam salvos neste navegador.
+</p>
+
+<div class="toolbar">
+  <button type="button" id="btn-new-project">Novo projeto</button>
+  <button type="button" id="btn-export-json">Exportar projeto (.json)</button>
+  <label class="button">Importar projeto (.json)<input type="file" id="input-import-json" accept=".json,application/json" hidden></label>
+</div>
+
+<!-- =============================================================== -->
+<fieldset>
+  <legend>1. Arquivo</legend>
+  <div class="grid">
+    <label>Encoding do arquivo
+      <select data-bind="settings.encoding" data-options="ENCODINGS"></select>
+    </label>
+  </div>
+  <label class="check"><input type="checkbox" data-bind="settings.useCdata">
+    Envolver textos (cidade, bairro, endereço, nomes) em CDATA — recomendado pela documentação para evitar erros com acentos.
+    Title e Description sempre vão em CDATA.</label>
+  <label class="check"><input type="checkbox" data-bind="settings.newlinesToBr">
+    Converter quebras de linha (Enter) da descrição em <code>&amp;lt;br&amp;gt;</code></label>
+  <label class="check"><input type="checkbox" data-bind="settings.garageTypeAttr">
+    Enviar <code>Garage</code> com o atributo <code>type="Parking Space"</code> (como nos exemplos completos da documentação)</label>
+</fieldset>
+
+<!-- =============================================================== -->
+<fieldset>
+  <legend>2. Cabeçalho (Header) — empresa responsável pelo arquivo</legend>
+  <div class="grid">
+    <label>Desenvolvedor do feed <code>Provider</code>
+      <input type="text" data-bind="header.provider"></label>
+    <label>E-mail <code>Email</code>
+      <input type="email" data-bind="header.email"></label>
+    <label>Nome do cliente <code>ContactName</code>
+      <input type="text" data-bind="header.contactName"></label>
+    <label>Telefone <code>Telephone</code>
+      <input type="text" data-bind="header.telephone" placeholder="11-3450 4646"></label>
+    <label>Data de publicação <code>PublishDate</code>
+      <input type="datetime-local" step="1" data-bind="header.publishDate"></label>
+  </div>
+  <label class="check"><input type="checkbox" data-bind="header.autoDate"> Usar a data/hora do momento da geração</label>
+</fieldset>
+
+<!-- =============================================================== -->
+<fieldset>
+  <legend>3. Imobiliária (ContactInfo) — usado em todos os imóveis</legend>
+  <div class="grid">
+    <label>Nome da imobiliária <span class="req">*</span> <code>Name</code>
+      <input type="text" data-bind="contact.name"></label>
+    <label>E-mail da imobiliária <span class="req">*</span> <code>Email</code>
+      <input type="email" data-bind="contact.email"></label>
+    <label>Website <code>Website</code>
+      <input type="url" data-bind="contact.website" placeholder="https://"></label>
+    <label>URL do logo <code>Logo</code>
+      <input type="url" data-bind="contact.logo" placeholder="https://"></label>
+    <label>Nome da agência/filial <code>OfficeName</code>
+      <input type="text" data-bind="contact.officeName"></label>
+    <label>Telefone <code>Telephone</code>
+      <input type="text" data-bind="contact.telephone"></label>
+  </div>
+  <details>
+    <summary>Endereço da imobiliária <code>ContactInfo/Location</code> (opcional)</summary>
+    <div class="grid">
+      <label>País <code>Country</code><input type="text" data-bind="contact.location.country"></label>
+      <label>Sigla do país <code>abbreviation</code><input type="text" data-bind="contact.location.countryAbbr" maxlength="2"></label>
+      <label>Estado (UF) <code>State</code><select data-bind="contact.location.state" data-options="STATES" data-empty="—"></select></label>
+      <label>Cidade <code>City</code><input type="text" data-bind="contact.location.city"></label>
+      <label>Bairro <code>Neighborhood</code><input type="text" data-bind="contact.location.neighborhood"></label>
+      <label>Endereço <code>Address</code><input type="text" data-bind="contact.location.address" placeholder="Rua Joá, 1890"></label>
+      <label>CEP <code>PostalCode</code><input type="text" data-bind="contact.location.postalCode" placeholder="00000-000"></label>
+    </div>
+  </details>
+</fieldset>
+
+<!-- =============================================================== -->
+<fieldset>
+  <legend>4. Imóveis (Listings)</legend>
+  <div class="toolbar">
+    <label>Imóvel em edição
+      <select id="listing-picker"></select>
+    </label>
+    <button type="button" id="btn-add-listing">+ Novo imóvel</button>
+    <button type="button" id="btn-duplicate-listing">Duplicar</button>
+    <button type="button" id="btn-remove-listing">Remover</button>
+    <span id="listing-count" class="muted"></span>
+  </div>
+
+  <div id="listing-editor">
+    <h3>Identificação</h3>
+    <div class="grid">
+      <label>Código do anúncio <span class="req">*</span> <code>ListingID</code>
+        <input type="text" data-bind="listing.listingId" maxlength="50">
+        <small>1 a 50 caracteres, único no arquivo.</small></label>
+      <label class="wide">Título <span class="req">*</span> <code>Title</code>
+        <input type="text" data-bind="listing.title" maxlength="100">
+        <small>10 a 100 caracteres, sem HTML. <span data-counter="listing.title"></span></small></label>
+      <label>Tipo de transação <span class="req">*</span> <code>TransactionType</code>
+        <select data-bind="listing.transactionType" data-options="TRANSACTION_TYPES"></select>
+        <small>Aluguel diário/semanal etc. também é "For Rent"; o período vai no RentalPrice.</small></label>
+      <label>Tipo de publicação <code>PublicationType</code>
+        <select data-bind="listing.publicationType" data-options="PUBLICATION_TYPES" data-empty="(não enviar)"></select>
+        <small>Destaques precisam respeitar a grade contratada.</small></label>
+      <label class="wide">URL do anúncio no seu site <code>DetailViewUrl</code>
+        <input type="url" data-bind="listing.detailViewUrl" placeholder="https://"></label>
+      <label class="wide">Tour virtual <code>VirtualTourLink</code>
+        <input type="url" data-bind="listing.virtualTourLink" placeholder="https://">
+        <small>Página só com o tour, https com certificado válido e sem link encurtado.</small></label>
+    </div>
+
+    <h3>Fotos e vídeos <span class="req">*</span> <code>Media</code></h3>
+    <p class="muted">
+      Mínimo de 5 fotos .jpg (até 7 MB cada); apenas uma foto de destaque (as demais seguem a ordem abaixo).
+      Até 1 vídeo do YouTube e até 1 vídeo curto vertical (reel: .mp4/.mov, 9:16, 10–60 s, até 80 MB, sem links de YouTube/Instagram/TikTok).
+      Ao trocar uma imagem, troque também a URL — o portal usa a URL como identificador.
+    </p>
+    <table class="media-table">
+      <thead><tr><th>#</th><th>Tipo <code>medium</code></th><th>URL</th><th>Legenda <code>caption</code></th><th>Destaque <code>primary</code></th><th></th></tr></thead>
+      <tbody id="media-rows"></tbody>
+    </table>
+    <div class="toolbar">
+      <button type="button" id="btn-add-media">+ Adicionar mídia</button>
+      <label class="wide">Colar várias URLs de fotos (uma por linha)
+        <textarea id="media-bulk" rows="3"></textarea></label>
+      <button type="button" id="btn-add-media-bulk">Adicionar URLs coladas</button>
+    </div>
+
+    <h3>Características <code>Details</code></h3>
+    <div class="grid">
+      <label>Finalidade <code>UsageType</code>
+        <select data-bind="listing.details.usageType" data-options="USAGE_TYPES" data-empty="(não enviar)"></select></label>
+      <label class="wide">Tipo de imóvel <span class="req">*</span> <code>PropertyType</code>
+        <select data-bind="listing.details.propertyType" id="property-type-select"></select>
+        <small id="property-type-hint"></small></label>
+    </div>
+
+    <label class="block">Descrição <span class="req">*</span> <code>Description</code>
+      <span class="desc-tools">
+        <button type="button" data-desc-insert="br">Quebra de linha</button>
+        <button type="button" data-desc-wrap="b">Negrito</button>
+        <button type="button" data-desc-wrap="i">Itálico</button>
+        <button type="button" data-desc-insert="bull">Marcador •</button>
+      </span>
+      <textarea data-bind="listing.details.description" id="description" rows="8"></textarea>
+      <small>50 a 3.000 caracteres, sem tags HTML. Formatação aceita (em entidades):
+        <code>&amp;lt;br&amp;gt;</code>, <code>&amp;lt;b&amp;gt;…&amp;lt;/b&amp;gt;</code>,
+        <code>&amp;lt;i&amp;gt;…&amp;lt;/i&amp;gt;</code>, <code>&amp;bull;</code>.
+        <span id="description-counter"></span></small>
+    </label>
+
+    <h4>Valores (somente números inteiros, sem R$, ponto ou vírgula)</h4>
+    <div class="grid">
+      <label data-show-when="sale">Valor de venda <span class="req">*</span> <code>ListPrice</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.listPrice"></label>
+      <label data-show-when="rent">Valor do aluguel <span class="req">*</span> <code>RentalPrice</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.rentalPrice"></label>
+      <label data-show-when="rent">Período do aluguel <code>period</code>
+        <select data-bind="listing.details.rentalPeriod" data-options="RENTAL_PERIODS"></select></label>
+      <label>Condomínio <code>PropertyAdministrationFee</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.adminFee">
+        <small>0 = isento.</small></label>
+      <label>IPTU <code>Iptu</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.iptu"></label>
+      <label>Período do IPTU <code>period</code>
+        <select data-bind="listing.details.iptuPeriod" data-options="IPTU_PERIODS"></select></label>
+    </div>
+    <label class="check"><input type="checkbox" data-bind="listing.details.sendYearlyTax">
+      Enviar também <code>YearlyTax</code> (campo antigo, em desuso, substituído por Iptu) com o valor anual do IPTU</label>
+
+    <h4>Áreas (m², valor inteiro) — atributo <code>unit="square metres"</code></h4>
+    <div class="grid">
+      <label>Área útil <span class="req" data-req="livingArea">*</span> <code>LivingArea</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.livingArea"></label>
+      <label>Área total <span class="req" data-req="lotArea">*</span> <code>LotArea</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.lotArea">
+        <small>Obrigatória para terrenos, galpões/depósitos, fazendas/sítios e chácaras.</small></label>
+    </div>
+
+    <h4>Cômodos e construção</h4>
+    <div class="grid">
+      <label>Quartos <span class="req" data-req="bedrooms">*</span> <code>Bedrooms</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.bedrooms">
+        <small id="bedrooms-hint"></small></label>
+      <label>Banheiros <span class="req" data-req="bathrooms">*</span> <code>Bathrooms</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.bathrooms"></label>
+      <label>Suítes <code>Suites</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.suites"></label>
+      <label>Vagas de garagem <code>Garage</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.garage"></label>
+      <label>Andares da torre <code>Floors</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.floors"></label>
+      <label>Andar do imóvel <code>UnitFloor</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.unitFloor"></label>
+      <label>Torres do condomínio <code>Buildings</code>
+        <input type="number" min="0" step="1" data-bind="listing.details.buildings"></label>
+      <label>Ano de construção <code>YearBuilt</code>
+        <input type="number" min="1000" max="2100" step="1" data-bind="listing.details.yearBuilt"></label>
+    </div>
+
+    <h4>Características do imóvel e do condomínio <code>Features</code></h4>
+    <div class="toolbar">
+      <input type="search" id="feature-filter" placeholder="Filtrar características…">
+      <span id="feature-count" class="muted"></span>
+      <button type="button" id="btn-clear-features">Desmarcar todas</button>
+    </div>
+    <div id="features" class="checks"></div>
+    <details>
+      <summary>Valores que aparecem nos exemplos da documentação, mas não na tabela oficial</summary>
+      <div id="features-extra" class="checks"></div>
+    </details>
+    <div class="toolbar">
+      <label>Outro valor de Feature
+        <input type="text" id="feature-custom"></label>
+      <button type="button" id="btn-add-feature-custom">Adicionar</button>
+      <span id="features-custom-list"></span>
+    </div>
+
+    <div data-show-when="rent">
+      <h4>Garantias para locação <code>Warranties</code></h4>
+      <div id="warranties" class="checks"></div>
+    </div>
+
+    <h3>Localização do imóvel <code>Location</code></h3>
+    <div class="grid">
+      <label class="wide">O que exibir do endereço <span class="req">*</span> <code>displayAddress</code>
+        <select data-bind="listing.location.displayAddress" data-options="DISPLAY_ADDRESS"></select>
+        <small>Independente da escolha, envie sempre o endereço completo (melhora a busca e o mapa).</small></label>
+      <label>País <span class="req">*</span> <code>Country</code>
+        <input type="text" data-bind="listing.location.country"></label>
+      <label>Sigla do país <span class="req">*</span> <code>abbreviation</code>
+        <input type="text" data-bind="listing.location.countryAbbr" maxlength="2"></label>
+      <label>Estado (UF) <span class="req">*</span> <code>State</code>
+        <select data-bind="listing.location.state" data-options="STATES" data-empty="—"></select></label>
+      <label>Cidade <span class="req">*</span> <code>City</code>
+        <input type="text" data-bind="listing.location.city">
+        <small id="df-hint" hidden>Distrito Federal: o que estiver entre parênteses no campo "Bairro/Distrito" dos Correios é a cidade (ex.: Águas Claras).</small></label>
+      <label>Zona <code>Zone</code>
+        <input type="text" data-bind="listing.location.zone" placeholder="Zona Sul">
+        <small>Ajuda a diferenciar bairros com o mesmo nome.</small></label>
+      <label>Bairro <span class="req">*</span> <code>Neighborhood</code>
+        <input type="text" data-bind="listing.location.neighborhood"></label>
+      <label class="wide">Logradouro <code>Address</code>
+        <input type="text" data-bind="listing.location.address" placeholder="Rua Bela Cintra"></label>
+      <label>Número <code>StreetNumber</code>
+        <input type="text" data-bind="listing.location.streetNumber"></label>
+      <label>Complemento <code>Complement</code>
+        <input type="text" data-bind="listing.location.complement" placeholder="apto 22, bl A">
+        <small>Não aparece nos portais.</small></label>
+      <label>CEP <span class="req">*</span> <code>PostalCode</code>
+        <input type="text" data-bind="listing.location.postalCode" placeholder="00000-000"></label>
+      <label>Latitude <code>Latitude</code>
+        <input type="text" inputmode="decimal" data-bind="listing.location.latitude" placeholder="-23.5531131"></label>
+      <label>Longitude <code>Longitude</code>
+        <input type="text" inputmode="decimal" data-bind="listing.location.longitude" placeholder="-46.659864"></label>
+    </div>
+
+    <h3>Contato <code>ContactInfo</code></h3>
+    <label class="check"><input type="checkbox" data-bind="listing.contact.useOwn">
+      Usar um contato diferente do da imobiliária (seção 3) neste imóvel</label>
+    <div data-show-when="ownContact">
+      <div class="grid">
+        <label>Nome <span class="req">*</span> <code>Name</code><input type="text" data-bind="listing.contact.name"></label>
+        <label>E-mail <span class="req">*</span> <code>Email</code><input type="email" data-bind="listing.contact.email"></label>
+        <label>Website <code>Website</code><input type="url" data-bind="listing.contact.website"></label>
+        <label>URL do logo <code>Logo</code><input type="url" data-bind="listing.contact.logo"></label>
+        <label>Agência/filial <code>OfficeName</code><input type="text" data-bind="listing.contact.officeName"></label>
+        <label>Telefone <code>Telephone</code><input type="text" data-bind="listing.contact.telephone"></label>
+        <label>País <code>Country</code><input type="text" data-bind="listing.contact.location.country"></label>
+        <label>Sigla do país <code>abbreviation</code><input type="text" data-bind="listing.contact.location.countryAbbr" maxlength="2"></label>
+        <label>Estado (UF) <code>State</code><select data-bind="listing.contact.location.state" data-options="STATES" data-empty="—"></select></label>
+        <label>Cidade <code>City</code><input type="text" data-bind="listing.contact.location.city"></label>
+        <label>Bairro <code>Neighborhood</code><input type="text" data-bind="listing.contact.location.neighborhood"></label>
+        <label>Endereço <code>Address</code><input type="text" data-bind="listing.contact.location.address"></label>
+        <label>CEP <code>PostalCode</code><input type="text" data-bind="listing.contact.location.postalCode"></label>
+      </div>
+    </div>
+  </div>
+</fieldset>
+
+<!-- =============================================================== -->
+<fieldset>
+  <legend>5. Gerar XML</legend>
+  <div class="toolbar">
+    <button type="button" id="btn-generate" class="primary">Validar e gerar XML</button>
+    <button type="button" id="btn-copy">Copiar XML</button>
+    <button type="button" id="btn-download">Baixar arquivo .xml</button>
+    <span id="status" class="muted"></span>
+  </div>
+  <ul id="issues"></ul>
+  <textarea id="output" rows="24" readonly spellcheck="false"></textarea>
+</fieldset>
+
+<script src="js/spec.js"></script>
+<script src="js/xml.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+/* Estilo mínimo e funcional; o visual definitivo virá depois. */
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; font-size: 14px; margin: 16px auto; max-width: 1200px; padding: 0 16px; color: #222; background: #fff; }
+h1 { margin-bottom: 4px; }
+h3 { margin: 24px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+h4 { margin: 16px 0 6px; }
+fieldset { border: 1px solid #ccc; margin: 16px 0; padding: 12px 16px; }
+legend { font-weight: bold; padding: 0 6px; }
+code { font-size: 12px; color: #555; background: #f3f3f3; padding: 0 3px; }
+small { display: block; color: #666; font-size: 12px; }
+.muted { color: #666; }
+.req { color: #c00; font-weight: bold; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 16px; margin: 8px 0; }
+.grid .wide { grid-column: span 2; }
+.grid label, label.block { display: flex; flex-direction: column; gap: 3px; }
+input[type=text], input[type=email], input[type=url], input[type=number], input[type=search],
+input[type=datetime-local], select, textarea { font: inherit; padding: 4px 6px; width: 100%; }
+textarea { font-family: ui-monospace, Consolas, monospace; }
+label.check { display: block; margin: 4px 0; }
+.checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px 12px; max-height: 360px; overflow: auto; border: 1px solid #eee; padding: 6px; }
+.checks label.check { margin: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin: 8px 0; }
+.toolbar label { display: flex; flex-direction: column; gap: 3px; }
+.toolbar label.wide { flex: 1 1 300px; }
+button, label.button { font: inherit; padding: 5px 10px; cursor: pointer; border: 1px solid #999; background: #f5f5f5; border-radius: 3px; }
+button.primary { background: #0a58ca; color: #fff; border-color: #0a58ca; }
+button.chip { padding: 2px 8px; font-size: 12px; }
+.desc-tools { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.media-table { width: 100%; border-collapse: collapse; }
+.media-table th, .media-table td { border: 1px solid #ddd; padding: 3px; text-align: left; }
+.media-table td:nth-child(3) { width: 50%; }
+.nowrap { white-space: nowrap; }
+#issues { padding-left: 18px; }
+#issues li { cursor: pointer; margin: 2px 0; }
+#issues li.error { color: #b00; }
+#issues li.warning { color: #8a5a00; }
+#output { min-height: 300px; }
+[hidden] { display: none !important; }
+@media (max-width: 640px) { .grid .wide { grid-column: auto; } }
