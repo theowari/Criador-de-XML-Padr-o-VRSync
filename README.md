@@ -249,9 +249,39 @@ Marque **"Usar um contato diferente"** se este imóvel deve aparecer com outro c
 
 Cada erro ou aviso da lista é **clicável**: o formulário abre o imóvel e leva você direto ao campo com problema.
 
+### Editar um XML existente (por link)
+
+No topo do formulário, o cartão **Editar um XML existente** permite começar de um arquivo que já está publicado, em vez de partir do zero.
+
+1. Cole o **link** do XML VRSync (só funciona com link) e clique em **Carregar XML**.
+2. O formulário é preenchido com o conteúdo do arquivo: cabeçalho, imobiliária e todos os imóveis. Edite o que quiser e use **+ Novo imóvel** para acrescentar outros.
+3. Gere o novo XML normalmente, no passo 5. O arquivo original nunca é alterado.
+
+O que acontece na leitura:
+
+| Situação | O que a ferramenta faz |
+| --- | --- |
+| Encoding `ISO8859-1` | Lê o encoding declarado no XML e decodifica certo (acentos preservados); a opção **Encoding** do passo 1 é ajustada |
+| `ContactInfo` repetido em todos os imóveis | O contato mais comum vira o da **imobiliária**; imóveis com contato diferente ficam com contato próprio |
+| `Description` com `&lt;br&gt;` | Vira Enter na caixa de texto e volta a `&lt;br&gt;` ao gerar |
+| Valor fora da lista oficial (ex.: `TransactionType` ou `PropertyType` desconhecido) | O campo fica em **branco** para você escolher, e o aviso aparece no relatório |
+| Elementos que o formulário não representa | **Não vão** para o novo XML; o relatório lista quais são e quantos |
+| `YearlyTax` sem `Iptu` (feeds antigos) | O valor é copiado para `Iptu` (anual) |
+| `PublishDate` | O valor lido é mostrado, mas **Usar a data/hora do momento da geração** fica ligado |
+
+Depois de carregar, aparece um relatório com os **pontos de atenção**. Se já houver dados no formulário, a ferramenta pede confirmação antes de substituí-los.
+
+> [!IMPORTANT]
+> **Bloqueio CORS.** A leitura é feita pelo navegador, e muitos servidores de XML não permitem que outros sites leiam o arquivo (falta o cabeçalho `Access-Control-Allow-Origin`). Nesse caso o navegador recusa o download e a ferramenta mostra *"Não foi possível baixar o arquivo"*. Há duas saídas:
+>
+> - fazer o servidor do XML enviar `Access-Control-Allow-Origin: *`; ou
+> - informar um **proxy CORS** seu ou de confiança em *"O servidor bloqueou o acesso? Usar um proxy"*, com `{url}` onde o link entra, por exemplo `https://meu-proxy.exemplo.com/?url={url}`. O proxy só é usado depois que o acesso direto falha, e ele enxerga o link e o conteúdo do XML. A ferramenta **não** traz nenhum proxy embutido.
+>
+> Links `http://` abertos a partir de uma página `https://` (como no GitHub Pages) também são bloqueados pelo navegador.
+
 ### Salvar, exportar e importar
 
-- **Salvamento automático:** tudo o que você digita é guardado no navegador. Pode fechar a aba e voltar depois.
+- **Salvamento automático:** tudo o que você digita é guardado no navegador. Pode fechar a aba e voltar depois. Se um XML importado for grande demais para o armazenamento do navegador (em geral, milhares de imóveis), aparece um aviso no topo; use **Exportar projeto** e **Baixar arquivo .xml** para não perder o trabalho.
 - **Exportar projeto (.json):** baixa tudo (configurações, cabeçalho, imobiliária e todos os imóveis) num arquivo. Use para fazer backup ou levar o trabalho para outro computador.
 - **Importar projeto (.json):** carrega um arquivo exportado antes.
 - **Novo projeto:** apaga tudo e recomeça (pede confirmação).
@@ -760,7 +790,7 @@ Estes valores são usados nos **exemplos completos** da documentação (`Close t
 
 ## 🔧 Como funciona por dentro
 
-O projeto é pequeno de propósito: quatro arquivos JavaScript, cada um com uma responsabilidade.
+O projeto é pequeno de propósito: cinco arquivos JavaScript, cada um com uma responsabilidade.
 
 ```mermaid
 flowchart LR
@@ -769,7 +799,9 @@ flowchart LR
         A -->|"salva"| LS[("localStorage")]
         A -->|"estado"| V["validate.js<br/>erros e avisos"]
         A -->|"estado"| X["xml.js<br/>gera o XML"]
+        I["import.js<br/>lê um XML existente"] -->|"estado"| A
     end
+    L["link do XML"] -.->|"fetch"| I
     S["spec.js<br/>valores e regras da documentação"] -.-> A
     S -.-> V
     S -.-> X
@@ -784,6 +816,7 @@ flowchart LR
 | [`js/spec.js`](js/spec.js) | **Fonte única da verdade.** Todas as listas de valores aceitos, os tipos de imóvel com suas regras e os limites numéricos da documentação. |
 | [`js/xml.js`](js/xml.js) | Recebe o estado e devolve o texto do XML. Cuida de indentação, CDATA, escape, encoding e ordem dos elementos. Também converte o texto para os bytes certos (UTF-8 ou ISO8859-1). |
 | [`js/validate.js`](js/validate.js) | Recebe o estado e devolve uma lista de `{ level, listing, field, message }`. Não altera nada. |
+| [`js/import.js`](js/import.js) | O caminho inverso de `xml.js`: baixa o XML de um link, decodifica o encoding declarado, lê o feed e devolve o estado do projeto mais um relatório (valores não reconhecidos, elementos ignorados). Não mexe na tela. |
 | [`js/app.js`](js/app.js) | Mantém o estado, preenche e lê os campos, controla a tabela de mídia, as características, o seletor de imóveis, o salvamento, a importação/exportação e os botões de gerar, copiar e baixar. |
 
 ### O estado
@@ -846,7 +879,7 @@ O visual foi deixado simples de propósito. Para redesenhar, mexa em `index.html
 
 - **Nada sai do seu computador.** Não há servidor, banco de dados, conta, cookie de rastreamento ou análise de uso.
 - Os dados ficam no `localStorage` do navegador. Para apagá-los, use **Novo projeto** ou limpe os dados do site.
-- O aplicativo não faz nenhuma requisição de rede: todos os arquivos (HTML, CSS e JavaScript) são locais. Só há acesso externo se **você** clicar nos links para a documentação. (Os selos coloridos no topo deste README vêm do shields.io, mas fazem parte do README, não do aplicativo.)
+- O aplicativo só faz uma requisição de rede quando **você** clica em **Carregar XML**: o navegador baixa o link que você colou, direto do servidor dele. Se você configurar um proxy CORS (opcional) e o acesso direto falhar, a requisição passa por ele, que vê o link e o conteúdo do XML. O endereço do proxy fica salvo só no seu navegador. Fora isso, todos os arquivos (HTML, CSS e JavaScript) são locais, e só há acesso externo se você clicar nos links para a documentação. (Os selos coloridos no topo deste README vêm do shields.io, mas fazem parte do README, não do aplicativo.)
 - O arquivo `.xml` e o `.json` são gerados no próprio navegador e baixados direto para o seu computador.
 
 ---
@@ -870,7 +903,7 @@ A documentação VRSync é boa, mas tem pontos ambíguos ou que se contradizem. 
 - **Não envia o arquivo ao portal.** Ela só gera o XML. Hospedar o arquivo numa URL pública ou enviá-lo segue o processo descrito no [Guia de conexão](https://developers.grupozap.com/feeds/connection_guideline.html).
 - **Não busca fotos nem confere se as URLs existem.** Ela confere a forma da URL e a extensão, não o conteúdo (tamanho, dimensões ou formato real do arquivo).
 - **Não consulta CEP.** Os campos de endereço são digitados.
-- **Não importa XML existente.** O formato de salvamento é o `.json` do próprio projeto.
+- **Só importa XML por link.** Não há envio de arquivo `.xml` do computador (o salvamento local usa o `.json` do próprio projeto), e links bloqueados por CORS exigem um proxy (veja [Editar um XML existente](#editar-um-xml-existente-por-link)). Elementos do XML que o formulário não representa não são preservados (o relatório da importação lista quais).
 - **Não cobre outros formatos.** Só o VRSync. O formato **ZAP**, marcado como depreciado na documentação, e quaisquer outros formatos de integração não estão incluídos.
 
 ---

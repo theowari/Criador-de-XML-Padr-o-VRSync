@@ -442,6 +442,20 @@ details.collapsible > :not(summary) { margin: 0 14px 14px; }
 }
 .media-add .grow { flex: 1 1 300px; }
 
+/* ------------------------------------------------------------------ importar XML */
+.import-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.import-row .grow { flex: 1 1 360px; }
+.import-status { margin: 12px 0 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.import-status.error { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.import-hint { display: block; margin-top: 4px; font-weight: normal; }
+#import-report { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--success); border-radius: var(--radius-sm); background: var(--surface-2); }
+.import-ok { margin: 0 0 6px; font-weight: 600; color: var(--success); }
+.import-facts, .import-notes { margin: 6px 0; padding-left: 20px; }
+.import-notes li { color: var(--warning); }
+#import-advanced { margin-top: 12px; }
+.banner { margin: 0 0 16px; padding: 10px 14px; border-left: 4px solid #d99a00; background: var(--warning-soft); color: var(--warning); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.banner[hidden] { display: none; }
+
 /* ------------------------------------------------------------------ gerar */
 .status { margin: 12px 0 0; font-weight: 600; }
 .status:empty { display: none; }

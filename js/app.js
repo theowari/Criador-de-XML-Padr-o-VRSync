@@ -8,7 +8,9 @@
   const V = window.VRSYNC;
   const X = window.VRSyncXml;
   const VAL = window.VRSyncValidate;
+  const IMP = window.VRSyncImport;
   const STORAGE_KEY = 'vrsync-generator-state-v1';
+  const PROXY_KEY = 'vrsync-generator-proxy-v1';
 
   const $ = function (sel, root) { return (root || document).querySelector(sel); };
   const $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
@@ -90,7 +92,10 @@
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* ignora */ }
+      let saved = true;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { saved = false; }
+      // Um XML importado com muitos imóveis pode passar do limite do armazenamento do navegador.
+      $('#storage-warning').hidden = saved;
     }, 300);
   }
 
@@ -166,7 +171,7 @@
       const st = V.STATES.find(function (s) { return s[0] === value; });
       setPath(path + 'Name', st ? st[1] : '');
     }
-    if (path === 'listing.listingId' || path === 'listing.title') renderPicker();
+    if (path === 'listing.listingId' || path === 'listing.title') updatePickerLabel();
     refreshDerived();
     save();
   }
@@ -236,6 +241,12 @@
     $('#btn-remove-listing').disabled = state.listings.length < 2;
   }
 
+  // Atualiza só o rótulo do imóvel em edição (refazer a lista inteira a cada tecla pesa com muitos imóveis).
+  function updatePickerLabel() {
+    const opt = $('#listing-picker').options[state.current];
+    if (opt) opt.text = listingLabel(current(), state.current);
+  }
+
   function selectListing(i) {
     state.current = i;
     renderPicker();
@@ -286,12 +297,6 @@
     });
     renderMedia();
     save();
-  }
-
-  function guessMedium(url) {
-    if (/youtube\.com|youtu\.be/i.test(url)) return 'video';
-    if (/\.(mp4|mov)(\?|#|$)/i.test(url)) return 'reel';
-    return 'image';
   }
 
   function onMediaInput(el) {
@@ -477,6 +482,125 @@
     }
   }
 
+  // ------------------------------------------------------------------ importar XML por link
+
+  function isPristine() {
+    return JSON.stringify(state) === JSON.stringify(defaultState());
+  }
+
+  // O resultado antigo não vale mais depois que o projeto é trocado.
+  function resetOutput() {
+    lastXml = '';
+    $('#output').value = '';
+    $('#issues').innerHTML = '';
+    $('#status').textContent = '';
+  }
+
+  function showImportStatus(kind, message, hint) {
+    const p = $('#import-status');
+    p.innerHTML = '';
+    p.hidden = !message;
+    p.className = 'import-status ' + kind;
+    if (!message) return;
+    const strong = document.createElement('strong');
+    strong.textContent = message;
+    p.appendChild(strong);
+    if (hint) {
+      const span = document.createElement('span');
+      span.className = 'import-hint';
+      span.textContent = hint;
+      p.appendChild(span);
+    }
+  }
+
+  function plural(n, one, many) {
+    return n + ' ' + (n === 1 ? one : many);
+  }
+
+  function renderImportReport(report) {
+    const box = $('#import-report');
+    box.innerHTML = '';
+    box.hidden = false;
+
+    const ok = document.createElement('p');
+    ok.className = 'import-ok';
+    let host = report.url;
+    try { host = new URL(report.url).host; } catch (e) { /* mantém a URL inteira */ }
+    ok.textContent = '✓ ' + plural(report.listings, 'imóvel carregado', 'imóveis carregados') + ' de ' + host +
+      (report.via === 'proxy' ? ' (pelo proxy)' : '') + '. Revise os dados, edite o que precisar e gere o XML no passo 5.';
+    box.appendChild(ok);
+
+    const facts = document.createElement('ul');
+    facts.className = 'import-facts';
+    const addFact = function (t) { const li = document.createElement('li'); li.textContent = t; facts.appendChild(li); };
+    addFact('Encoding do arquivo: ' + report.encoding + '. O cabeçalho e a imobiliária foram preenchidos a partir do XML; a data de publicação será a do momento em que você gerar o novo arquivo.');
+    if (report.ownContacts) {
+      addFact(plural(report.ownContacts, 'imóvel tem', 'imóveis têm') + ' um contato diferente do da imobiliária e ficou com contato próprio.');
+    }
+    box.appendChild(facts);
+
+    const attention = [];
+    report.notes.forEach(function (n) {
+      attention.push(n.message + (n.count ? ' (' + plural(n.count, 'imóvel', 'imóveis') + ')' : ''));
+    });
+    if (report.ignored.length) {
+      const total = report.ignored.reduce(function (s, x) { return s + x.count; }, 0);
+      attention.push('Elementos do XML que este formulário não representa e que não vão para o novo arquivo (' + total + ' no total): ' +
+        report.ignored.slice(0, 8).map(function (x) { return x.path + ' ×' + x.count; }).join(', ') +
+        (report.ignored.length > 8 ? ' e mais ' + (report.ignored.length - 8) + ' tipo(s)' : '') + '.');
+    }
+    if (attention.length) {
+      const det = document.createElement('details');
+      det.className = 'collapsible';
+      det.open = true;
+      const sum = document.createElement('summary');
+      sum.textContent = 'Pontos de atenção (' + attention.length + ')';
+      det.appendChild(sum);
+      const ul = document.createElement('ul');
+      ul.className = 'import-notes';
+      attention.forEach(function (t) { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+      det.appendChild(ul);
+      box.appendChild(det);
+    }
+  }
+
+  let importing = false;
+  async function importFromUrl() {
+    if (importing) return;
+    const button = $('#btn-import-url');
+    importing = true;
+    button.disabled = true;
+    $('#import-report').hidden = true;
+    showImportStatus('loading', 'Carregando o XML…');
+    try {
+      const result = await IMP.loadFromUrl($('#import-url').value, {
+        proxy: $('#import-proxy').value,
+        onStatus: function (msg) { showImportStatus('loading', msg); },
+      });
+      if (!isPristine() && !confirm('Carregar este XML substitui o projeto atual (imóveis, cabeçalho e imobiliária). Continuar?')) {
+        showImportStatus('', '');
+        return;
+      }
+      state = normalize(result.project);
+      resetOutput();
+      renderPicker();
+      fillForm();
+      save();
+      showImportStatus('', '');
+      renderImportReport(result.report);
+    } catch (e) {
+      if (e && e.name === 'ImportError') {
+        showImportStatus('error', e.message, e.hint);
+        if (e.code === 'network') $('#import-advanced').open = true;
+      } else {
+        showImportStatus('error', 'Erro inesperado ao ler o XML.', e && e.message);
+      }
+    } finally {
+      importing = false;
+      button.disabled = false;
+    }
+  }
+
   // ------------------------------------------------------------------ eventos
 
   function wire() {
@@ -530,7 +654,7 @@
     $('#btn-add-media-bulk').addEventListener('click', function () {
       const ta = $('#media-bulk');
       const urls = ta.value.split(/\s+/).map(function (u) { return u.trim(); }).filter(Boolean);
-      addMedia(urls.map(function (u) { return { medium: guessMedium(u), url: u }; }));
+      addMedia(urls.map(function (u) { return { medium: IMP.guessMedium(u), url: u }; }));
       ta.value = '';
     });
 
@@ -550,6 +674,14 @@
       const v = input.value.trim();
       if (v) toggleListValue('features', v, true);
       input.value = '';
+    });
+
+    $('#btn-import-url').addEventListener('click', importFromUrl);
+    $('#import-url').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); importFromUrl(); }
+    });
+    $('#import-proxy').addEventListener('input', function (e) {
+      try { localStorage.setItem(PROXY_KEY, e.target.value.trim()); } catch (err) { /* ignora */ }
     });
 
     $('#btn-generate').addEventListener('click', generate);
@@ -589,6 +721,7 @@
   buildChecks($('#features-extra'), V.FEATURES_FROM_EXAMPLES, 'features');
   buildChecks($('#warranties'), V.WARRANTIES, 'warranties');
   wire();
+  try { $('#import-proxy').value = localStorage.getItem(PROXY_KEY) || ''; } catch (e) { /* ignora */ }
   renderPicker();
   fillForm();
 })();
